@@ -80,6 +80,7 @@ const SearchForm: React.FC<SearchFormProps> = ({
         <div className="text-sm text-gray-600 dark:text-gray-400">
           <p>💡 전국 롯데마트 매장을 검색하여 재고가 있는 상품만 표시합니다</p>
           <p>⏱️ 검색에는 약 30초~1분 정도 소요될 수 있습니다</p>
+          <p>📱 모바일에서는 Wi-Fi 환경에서 사용하시는 것을 권장합니다</p>
         </div>
       </form>
     </div>

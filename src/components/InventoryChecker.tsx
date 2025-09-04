@@ -46,7 +46,19 @@ const InventoryChecker: React.FC = () => {
       
     } catch (err) {
       console.error('검색 중 오류 발생:', err);
-      setError('검색 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
+      
+      // 에러 타입에 따른 구체적인 메시지 제공
+      if (err instanceof Error) {
+        if (err.name === 'AbortError') {
+          setError('네트워크 응답 시간이 초과되었습니다. Wi-Fi 환경에서 다시 시도해주세요.');
+        } else if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
+          setError('네트워크 연결을 확인하고 다시 시도해주세요. 모바일에서는 Wi-Fi 사용을 권장합니다.');
+        } else {
+          setError('검색 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
+        }
+      } else {
+        setError('검색 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
+      }
     } finally {
       setIsLoading(false);
     }

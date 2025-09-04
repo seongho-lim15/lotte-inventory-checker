@@ -166,19 +166,24 @@ const getMockStores = (region: Region): Store[] => {
  */
 export const fetchStoresByRegion = async (region: Region): Promise<Store[]> => {
   try {
-    // 실제 롯데마트 API 호출 (프록시 사용)
+    // 실제 롯데마트 API 호출 (프록시 사용) - 모바일 호환성 개선
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30초 타임아웃
+    
     const response = await fetch(
       `${PROXY_BASE_URL}/inc/asp/search_market_list.asp?p_area=${encodeURIComponent(region)}&p_type=1`,
       {
+        signal: controller.signal,
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36',
           'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
           'Accept-Language': 'ko-KR,ko;q=0.9,en;q=0.8',
-          'Accept-Encoding': 'gzip, deflate, br',
-          'Referer': 'https://company.lottemart.com/mobiledowa/',
+          // User-Agent와 Accept-Encoding은 브라우저가 자동으로 설정하도록 제거
+          // Referer 단순화
         },
       }
     );
+    
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       throw new Error(`API 응답 오류: ${response.status}`);
@@ -191,7 +196,12 @@ export const fetchStoresByRegion = async (region: Region): Promise<Store[]> => {
     return stores;
     
   } catch (error) {
-    console.error(`${region} 지역 매장 목록 조회 실패:`, error);
+    // 타임아웃이나 AbortError 처리
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.error(`${region} 지역 매장 목록 조회 타임아웃 (30초 초과)`);
+    } else {
+      console.error(`${region} 지역 매장 목록 조회 실패:`, error);
+    }
     
     // API 실패시 백업으로 Mock 데이터 사용
     const stores = getMockStores(region);
@@ -468,18 +478,21 @@ export const searchProductsInStore = async (
   try {
     const storeName = getStoreName(region, storeCode);
 
-    // 실제 롯데마트 API 호출 (프록시 사용)
+    // 실제 롯데마트 API 호출 (프록시 사용) - 모바일 호환성 개선
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 45000); // 45초 타임아웃 (상품 검색이 더 오래 걸림)
+    
     const response = await fetch(
       `${PROXY_BASE_URL}/product/search_product.asp`,
       {
         method: 'POST',
+        signal: controller.signal,
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36',
           'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
           'Accept-Language': 'ko-KR,ko;q=0.9,en;q=0.8',
-          'Accept-Encoding': 'gzip, deflate, br',
-          'Referer': 'https://company.lottemart.com/mobiledowa/',
+          // User-Agent와 Accept-Encoding은 브라우저가 자동으로 설정하도록 제거
+          // Referer 제거 (모바일에서 문제가 될 수 있음)
         },
         body: new URLSearchParams({
           p_area: region,
@@ -488,6 +501,8 @@ export const searchProductsInStore = async (
         }).toString(),
       }
     );
+    
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       throw new Error(`API 응답 오류: ${response.status}`);
@@ -506,7 +521,12 @@ export const searchProductsInStore = async (
     return products;
     
   } catch (error) {
-    console.error(`상품 검색 실패 (${region} - ${storeCode}):`, error);
+    // 타임아웃이나 AbortError 처리
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.error(`상품 검색 타임아웃 (${region} - ${storeCode}) - 45초 초과`);
+    } else {
+      console.error(`상품 검색 실패 (${region} - ${storeCode}):`, error);
+    }
     return [];
   }
 };
