@@ -61,8 +61,8 @@ export const searchAllStores = async (keyword: string): Promise<Product[]> => {
 
   const allProducts: Product[] = [];
   
-  // 서울, 경기, 인천만 검색 (사용자 요청)
-  const targetRegions: Region[] = ['서울', '경기', '인천'];
+  // 서울, 경기만 검색 (사용자 요청)
+  const targetRegions: Region[] = ['서울', '경기'];
   for (const region of targetRegions) {
     try {
       console.log(`${region} 지역 매장들 검색 중...`);
@@ -70,20 +70,29 @@ export const searchAllStores = async (keyword: string): Promise<Product[]> => {
       // 지역별 매장 목록 가져오기
       const stores = await fetchStoresByRegion(region);
       
-      // 각 매장에서 상품 검색 (병렬 처리)
-      const regionProducts = await Promise.allSettled(
-        stores.map(store => searchProductsInStore(region, store.code, keyword))
+      // 토이저러스, 그랑그로서리 매장만 필터링
+      const filteredStores = stores.filter(store => 
+        store.name.includes('토이저러스') || store.name.includes('그랑그로서리')
       );
-
-      // 성공한 결과들만 수집
-      regionProducts.forEach((result) => {
-        if (result.status === 'fulfilled') {
-          allProducts.push(...result.value);
+      
+      console.log(`${region} 지역: 전체 ${stores.length}개 매장 중 ${filteredStores.length}개 매장(토이저러스/그랑그로서리)을 검색합니다.`);
+      
+      // 각 매장에서 상품 검색 (순차 처리)
+      for (const store of filteredStores) {
+        try {
+          console.log(`${region} ${store.name} 검색 중...`);
+          const products = await searchProductsInStore(region, store.code, keyword);
+          allProducts.push(...products);
+          
+          // API 부하 방지를 위한 딜레이 (매장마다)
+          await new Promise(resolve => setTimeout(resolve, 500));
+        } catch (error) {
+          console.error(`${region} ${store.name} 검색 실패:`, error);
         }
-      });
+      }
 
-      // API 부하 방지를 위한 딜레이
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // 지역 간 딜레이
+      await new Promise(resolve => setTimeout(resolve, 300));
       
     } catch (error) {
       console.error(`${region} 지역 검색 중 오류:`, error);

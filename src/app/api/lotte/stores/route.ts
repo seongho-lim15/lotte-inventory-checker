@@ -127,7 +127,7 @@ const parseStoreListFromHtml = (html: string, region: Region): Store[] => {
   return stores;
 };
 
-// 토이저러스와 그랑그로서리 매장만 포함한 Mock 데이터
+// 토이저러스와 그랑그로서리 매장만 포함한 Mock 데이터 (서울, 경기만)
 const getMockStores = (region: Region): Store[] => {
   const storeMap: Partial<Record<Region, Store[]>> = {
     '서울': [
@@ -148,12 +148,7 @@ const getMockStores = (region: Region): Store[] => {
       { code: '496', name: '토이저러스 기흥점', region: '경기' },
       { code: '497', name: '토이저러스 파주점', region: '경기' },
     ],
-    '인천': [
-      { code: '461', name: '청라점', region: '인천' },
-      { code: '426', name: '부평점', region: '인천' },
-      { code: '404', name: '부평역점', region: '인천' },
-    ],
-    // API 확인된 지역만 포함, 나머지 지역은 필요시 실제 API 확인 후 추가
+    // 인천 제외, 서울/경기만 지원
   };
 
   return storeMap[region] || [];
@@ -187,17 +182,28 @@ export async function GET(request: NextRequest) {
     }
 
     const html = await response.text();
-    const stores = parseStoreListFromHtml(html, region);
+    const allStores = parseStoreListFromHtml(html, region);
+    
+    // 토이저러스, 그랑그로서리 매장만 필터링
+    const filteredStores = allStores.filter(store => 
+      store.name.includes('토이저러스') || store.name.includes('그랑그로서리')
+    );
 
-    console.log(`${region} 지역 매장 ${stores.length}개 발견`);
-    return NextResponse.json(stores);
+    console.log(`${region} 지역: 전체 ${allStores.length}개 매장 중 ${filteredStores.length}개 매장(토이저러스/그랑그로서리) 반환`);
+    return NextResponse.json(filteredStores);
     
   } catch (error) {
     console.error('매장 목록 조회 오류:', error);
     
     // API 실패시 백업으로 Mock 데이터 사용
-    const stores = getMockStores(region);
-    console.log(`API 실패, Mock 데이터 사용: ${region} 지역 매장 ${stores.length}개`);
-    return NextResponse.json(stores);
+    const mockStores = getMockStores(region);
+    
+    // Mock 데이터에서도 토이저러스, 그랑그로서리만 필터링
+    const filteredMockStores = mockStores.filter(store => 
+      store.name.includes('토이저러스') || store.name.includes('그랑그로서리')
+    );
+    
+    console.log(`API 실패, Mock 데이터 사용: ${region} 지역 ${filteredMockStores.length}개 매장(토이저러스/그랑그로서리)`);
+    return NextResponse.json(filteredMockStores);
   }
 }
