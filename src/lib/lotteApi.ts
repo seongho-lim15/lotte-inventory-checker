@@ -75,24 +75,27 @@ export const searchAllStores = async (keyword: string): Promise<Product[]> => {
         store.name.includes('토이저러스') || store.name.includes('그랑그로서리')
       );
       
-      console.log(`${region} 지역: 전체 ${stores.length}개 매장 중 ${filteredStores.length}개 매장(토이저러스/그랑그로서리)을 검색합니다.`);
+      // 타임아웃 방지를 위해 매장 수 제한 (주요 매장 우선)
+      const priorityStores = filteredStores.slice(0, 8); // 지역당 최대 8개 매장
+      
+      console.log(`${region} 지역: 전체 ${stores.length}개 매장 중 ${filteredStores.length}개 매장(토이저러스/그랑그로서리) 발견, ${priorityStores.length}개 매장 검색 예정`);
       
       // 각 매장에서 상품 검색 (순차 처리)
-      for (const store of filteredStores) {
+      for (const store of priorityStores) {
         try {
           console.log(`${region} ${store.name} 검색 중...`);
           const products = await searchProductsInStore(region, store.code, keyword);
           allProducts.push(...products);
           
           // API 부하 방지를 위한 딜레이 (매장마다)
-          await new Promise(resolve => setTimeout(resolve, 500));
+          await new Promise(resolve => setTimeout(resolve, 200));
         } catch (error) {
           console.error(`${region} ${store.name} 검색 실패:`, error);
         }
       }
 
       // 지역 간 딜레이
-      await new Promise(resolve => setTimeout(resolve, 300));
+      await new Promise(resolve => setTimeout(resolve, 100));
       
     } catch (error) {
       console.error(`${region} 지역 검색 중 오류:`, error);

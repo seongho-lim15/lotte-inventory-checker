@@ -340,7 +340,7 @@ export async function POST(request: NextRequest) {
     // Vercel serverless function 최적화: 짧은 타임아웃 (Free tier 10초 제한)
     const controller = new AbortController();
     const isVercel = process.env.VERCEL === '1';
-    const timeoutDuration = isVercel ? 8000 : 30000; // Vercel에서 8초, 로컬에서 30초
+    const timeoutDuration = isVercel ? 5000 : 30000; // Vercel에서 5초, 로컬에서 30초 (개별 요청)
     const timeoutId = setTimeout(() => controller.abort(), timeoutDuration);
 
     let response;
