@@ -11,7 +11,7 @@ const getBrowserInfo = () => {
   const isSafari = /^((?!chrome|android).)*safari/i.test(userAgent);
   const isChrome = /chrome/i.test(userAgent) && !/edge/i.test(userAgent);
   const isMobile = /iPhone|iPad|iPod|Android/i.test(userAgent);
-  const isWiFi = 'connection' in navigator ? (navigator as any).connection?.effectiveType !== 'slow-2g' : true;
+  const isWiFi = 'connection' in navigator ? (navigator as Navigator & { connection?: { effectiveType?: string } }).connection?.effectiveType !== 'slow-2g' : true;
   
   let browser = 'unknown';
   if (isChrome) browser = 'chrome';
