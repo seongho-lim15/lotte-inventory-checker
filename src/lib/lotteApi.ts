@@ -1,4 +1,4 @@
-import { Store, Product, Region, REGIONS } from '@/types/lotte';
+import { Store, Product, Region } from '@/types/lotte';
 
 // CORS 문제 해결을 위한 프록시 URL (실제로는 Next.js API 라우트를 사용)
 const BASE_URL = '/api/lotte';

@@ -129,7 +129,7 @@ const parseStoreListFromHtml = (html: string, region: Region): Store[] => {
 
 // 토이저러스와 그랑그로서리 매장만 포함한 Mock 데이터
 const getMockStores = (region: Region): Store[] => {
-  const storeMap: Record<Region, Store[]> = {
+  const storeMap: Partial<Record<Region, Store[]>> = {
     '서울': [
       { code: '326', name: '토이저러스 제타플렉스', region: '서울' },
       { code: '344', name: '토이저러스 양평점', region: '서울' },

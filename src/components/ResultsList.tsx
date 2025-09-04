@@ -25,7 +25,7 @@ const ResultsList: React.FC<ResultsListProps> = ({ results, searchedKeyword }) =
         <div className="flex items-center gap-3 mb-4">
           <span className="text-2xl">📋</span>
           <h2 className="text-xl font-bold text-gray-800 dark:text-white">
-            "{searchedKeyword}" 검색 결과
+            &quot;{searchedKeyword}&quot; 검색 결과
           </h2>
         </div>
         
@@ -53,7 +53,7 @@ const ResultsList: React.FC<ResultsListProps> = ({ results, searchedKeyword }) =
 
       {/* 지역별 결과 */}
       <div className="space-y-6">
-        {results.map((regionGroup, regionIndex) => (
+        {results.map((regionGroup) => (
           <div 
             key={regionGroup.region}
             className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden"
