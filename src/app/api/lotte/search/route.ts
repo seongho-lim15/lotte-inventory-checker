@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Product, Region } from '@/types/lotte';
 
 // HTML에서 상품 목록을 파싱하는 함수 (성능 최적화 버전)
-const parseProductListFromHtml = (html: string, region: Region, storeCode: string, storeName: string): Product[] => {
+const parseProductListFromHtml = (html: string, region: Region, storeCode: string, storeName: string, isVercel: boolean = false): Product[] => {
   const products: Product[] = [];
   
   try {
@@ -10,10 +10,13 @@ const parseProductListFromHtml = (html: string, region: Region, storeCode: strin
       console.log('=== HTML 파싱 시작 ===');
     }
     
-    // 성능 최적화: HTML 길이 제한 (메모리 보호)
-    if (html.length > 1000000) { // 1MB 제한
-      console.warn(`HTML 크기가 너무 큽니다: ${html.length} bytes. 첫 1MB만 파싱합니다.`);
-      html = html.substring(0, 1000000);
+    // Vercel 메모리 및 응답 크기 제한 대응
+    const maxHtmlSize = isVercel ? 500000 : 1000000; // Vercel에서 500KB, 로컬에서 1MB
+    if (html.length > maxHtmlSize) {
+      if (process.env.NODE_ENV === 'development') {
+        console.warn(`HTML 크기가 너무 큽니다: ${html.length} bytes. 첫 ${maxHtmlSize / 1000}KB만 파싱합니다.`);
+      }
+      html = html.substring(0, maxHtmlSize);
     }
     
     // <li> 태그로 각 상품을 분리 (최적화된 정규식)
@@ -21,7 +24,7 @@ const parseProductListFromHtml = (html: string, region: Region, storeCode: strin
     const listItems = [];
     let listItemMatch;
     let matchCount = 0;
-    const maxMatches = 100; // 최대 100개 상품으로 제한
+    const maxMatches = isVercel ? 50 : 100; // Vercel에서 최대 50개, 로컬에서 100개 상품으로 제한
     
     // 먼저 모든 li 태그를 수집 (성능 최적화)
     while ((listItemMatch = listItemRegex.exec(html)) !== null && matchCount < maxMatches) {
@@ -302,6 +305,14 @@ const getStoreName = (region: Region, storeCode: string): string => {
 };
 
 export async function POST(request: NextRequest) {
+  // Vercel 환경 감지 및 로깅
+  const isVercel = process.env.VERCEL === '1';
+  const requestId = Math.random().toString(36).substring(7);
+  
+  if (process.env.NODE_ENV === 'development' || isVercel) {
+    console.log(`[요청 ${requestId}] 상품 검색 API 시작 - Vercel: ${isVercel}`);
+  }
+  
   try {
     // JSON 파싱 에러 처리 개선
     let requestBody;
@@ -334,9 +345,11 @@ export async function POST(request: NextRequest) {
 
     const storeName = getStoreName(region as Region, storeCode);
 
-    // 실제 롯데마트 API 호출 (타임아웃 및 에러 처리 개선)
+    // Vercel serverless function 최적화: 짧은 타임아웃 (Free tier 10초 제한)
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30초 타임아웃
+    const isVercel = process.env.VERCEL === '1';
+    const timeoutDuration = isVercel ? 8000 : 30000; // Vercel에서 8초, 로컬에서 30초
+    const timeoutId = setTimeout(() => controller.abort(), timeoutDuration);
 
     let response;
     try {
@@ -363,9 +376,12 @@ export async function POST(request: NextRequest) {
     } catch (fetchError: unknown) {
       clearTimeout(timeoutId);
       if (fetchError instanceof Error && fetchError.name === 'AbortError') {
-        console.error('요청 타임아웃:', fetchError);
+        console.error(`[요청 ${requestId}] 요청 타임아웃 (${timeoutDuration}ms):`, fetchError.message);
         return NextResponse.json(
-          { error: '요청 시간이 초과되었습니다' },
+          { 
+            error: isVercel ? '서버 시간 제한으로 요청이 중단되었습니다' : '요청 시간이 초과되었습니다',
+            requestId: isVercel ? requestId : undefined
+          },
           { status: 408 }
         );
       }
@@ -375,9 +391,12 @@ export async function POST(request: NextRequest) {
     }
 
     if (!response.ok) {
-      console.error(`롯데마트 API 응답 오류: ${response.status} ${response.statusText}`);
+      console.error(`[요청 ${requestId}] 롯데마트 API 응답 오류: ${response.status} ${response.statusText}`);
       return NextResponse.json(
-        { error: `외부 API 오류: ${response.status}` },
+        { 
+          error: `외부 API 오류: ${response.status}`,
+          requestId: isVercel ? requestId : undefined
+        },
         { status: 502 }
       );
     }
@@ -386,9 +405,12 @@ export async function POST(request: NextRequest) {
     try {
       html = await response.text();
     } catch (textError) {
-      console.error('HTML 응답 읽기 오류:', textError);
+      console.error(`[요청 ${requestId}] HTML 응답 읽기 오류:`, textError);
       return NextResponse.json(
-        { error: '응답 데이터를 읽을 수 없습니다' },
+        { 
+          error: '응답 데이터를 읽을 수 없습니다',
+          requestId: isVercel ? requestId : undefined
+        },
         { status: 502 }
       );
     }
@@ -401,14 +423,19 @@ export async function POST(request: NextRequest) {
       console.log('=== HTML 응답 끝 ===');
     }
     
-    const products = parseProductListFromHtml(html, region as Region, storeCode, storeName);
+    const products = parseProductListFromHtml(html, region as Region, storeCode, storeName, isVercel);
 
     // 개발 환경에서만 상세 로깅, 프로덕션에서는 에러만 로깅
     if (process.env.NODE_ENV === 'development') {
-      console.log(`${region} ${storeName}에서 "${keyword}" 검색 결과: ${products.length}개`);
+      console.log(`[요청 ${requestId}] ${region} ${storeName}에서 "${keyword}" 검색 결과: ${products.length}개`);
     } else if (products.length === 0) {
       // 프로덕션에서는 결과가 없을 때만 로깅
-      console.warn(`상품 검색 결과 없음: ${region} ${storeName} "${keyword}"`);
+      console.warn(`[요청 ${requestId}] 상품 검색 결과 없음: ${region} ${storeName} "${keyword}"`);
+    }
+    
+    // Vercel 환경에서 성공 로깅
+    if (isVercel && products.length > 0) {
+      console.log(`[요청 ${requestId}] 성공: ${products.length}개 상품 반환`);
     }
     
     return NextResponse.json(products);
@@ -416,16 +443,19 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     // 에러 로깅에서 변수 스코프 문제 해결
     const errorInfo = {
+      requestId,
       message: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-      timestamp: new Date().toISOString()
+      stack: process.env.NODE_ENV === 'development' ? (error instanceof Error ? error.stack : undefined) : undefined,
+      timestamp: new Date().toISOString(),
+      isVercel
     };
     
-    console.error('상품 검색 오류:', errorInfo);
+    console.error(`[요청 ${requestId}] 상품 검색 오류:`, errorInfo);
     
     return NextResponse.json(
       { 
         error: '상품 검색에 실패했습니다',
+        requestId: isVercel ? requestId : undefined,
         details: process.env.NODE_ENV === 'development' ? error instanceof Error ? error.message : String(error) : undefined
       },
       { status: 500 }

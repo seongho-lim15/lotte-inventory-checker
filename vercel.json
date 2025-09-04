@@ -1,0 +1,11 @@
+{
+  "functions": {
+    "src/app/api/lotte/search/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/lotte/stores/route.ts": {
+      "maxDuration": 30
+    }
+  },
+  "crons": []
+}

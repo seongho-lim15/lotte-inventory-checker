@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "build:vercel": "next build",
+    "deploy": "vercel --prod",
+    "vercel:dev": "vercel dev"
   },
   "dependencies": {
     "react": "19.1.0",
