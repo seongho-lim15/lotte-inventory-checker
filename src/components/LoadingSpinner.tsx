@@ -21,7 +21,10 @@ const LoadingSpinner: React.FC = () => {
               수도권 롯데마트 매장 검색 중...
             </h3>
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              서울, 경기, 인천 3개 지역의 매장을 확인하고 있습니다
+              네트워크 부하 최적화로 배치 단위로 검색합니다
+            </p>
+            <p className="text-xs text-blue-600 dark:text-blue-400">
+              서울 → 경기 → 인천 순으로 매장별 재고를 확인 중입니다
             </p>
           </div>
           

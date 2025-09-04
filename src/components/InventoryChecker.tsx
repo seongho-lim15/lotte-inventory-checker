@@ -26,7 +26,16 @@ const InventoryChecker: React.FC = () => {
     setSearchedKeyword(searchKeyword);
 
     try {
-      console.log(`"${searchKeyword}" 검색 시작...`);
+      // 브라우저 환경 정보 출력
+      const userAgent = typeof window !== 'undefined' ? navigator.userAgent : 'server';
+      const isMobile = typeof window !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+      const browser = typeof window !== 'undefined' && /chrome/i.test(navigator.userAgent) ? 'chrome' : 
+                    typeof window !== 'undefined' && /safari/i.test(navigator.userAgent) ? 'safari' : 'unknown';
+      
+      console.log(`=== 검색 시작 ===`);
+      console.log(`검색어: "${searchKeyword}"`);
+      console.log(`브라우저: ${browser} (${isMobile ? '모바일' : 'PC'})`);
+      console.log(`User-Agent: ${userAgent.substring(0, 100)}...`);
       
       // 모든 매장에서 상품 검색
       const allProducts = await searchAllStores(searchKeyword);
@@ -45,16 +54,24 @@ const InventoryChecker: React.FC = () => {
       }
       
     } catch (err) {
-      console.error('검색 중 오류 발생:', err);
+      const browser = typeof window !== 'undefined' && /chrome/i.test(navigator.userAgent) ? 'chrome' : 
+                    typeof window !== 'undefined' && /safari/i.test(navigator.userAgent) ? 'safari' : 'unknown';
+      const isMobile = typeof window !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+      
+      console.error(`[${browser}-${isMobile ? 'mobile' : 'pc'}] 검색 중 오류 발생:`, err);
       
       // 에러 타입에 따른 구체적인 메시지 제공
       if (err instanceof Error) {
         if (err.name === 'AbortError') {
-          setError('네트워크 응답 시간이 초과되었습니다. Wi-Fi 환경에서 다시 시도해주세요.');
+          setError(`⏱️ 네트워크 응답 시간이 초과되었습니다. Wi-Fi 환경에서 다시 시도해주세요. (${browser})`);
         } else if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
-          setError('네트워크 연결을 확인하고 다시 시도해주세요. 모바일에서는 Wi-Fi 사용을 권장합니다.');
+          if (browser === 'safari' || !isMobile) {
+            setError('🌐 사파리/PC에서 네트워크 문제가 발생했습니다. 크롬 모바일 앱 사용을 권장합니다.');
+          } else {
+            setError('📶 네트워크 연결을 확인하고 Wi-Fi 환경에서 다시 시도해주세요.');
+          }
         } else {
-          setError('검색 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
+          setError(`❌ 검색 중 오류가 발생했습니다. (${browser}-${isMobile ? 'mobile' : 'pc'}) 잠시 후 다시 시도해주세요.`);
         }
       } else {
         setError('검색 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');

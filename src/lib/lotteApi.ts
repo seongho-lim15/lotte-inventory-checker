@@ -3,10 +3,28 @@ import { Store, Product, Region } from '@/types/lotte';
 // CORS 문제 해결을 위한 프록시 URL (Next.js rewrite 사용)
 const PROXY_BASE_URL = '/api/proxy/lotte';
 
-// 브라우저별 헤더 설정 함수
+// 브라우저 정보 감지 함수
+const getBrowserInfo = () => {
+  if (typeof window === 'undefined') return { browser: 'server', isMobile: false };
+  
+  const userAgent = navigator.userAgent;
+  const isSafari = /^((?!chrome|android).)*safari/i.test(userAgent);
+  const isChrome = /chrome/i.test(userAgent) && !/edge/i.test(userAgent);
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(userAgent);
+  const isWiFi = 'connection' in navigator ? (navigator as any).connection?.effectiveType !== 'slow-2g' : true;
+  
+  let browser = 'unknown';
+  if (isChrome) browser = 'chrome';
+  else if (isSafari) browser = 'safari';
+  
+  console.log(`브라우저 정보: ${browser}, 모바일: ${isMobile}, 네트워크: ${isWiFi ? 'fast' : 'slow'}`);
+  
+  return { browser, isMobile, isWiFi, userAgent };
+};
+
+// 브라우저별 헤더 설정 함수 (디버깅 정보 추가)
 const getBrowserHeaders = () => {
-  const isSafari = typeof window !== 'undefined' && /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-  const isMobile = typeof window !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  const { browser, isMobile } = getBrowserInfo();
   
   const baseHeaders = {
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -15,11 +33,13 @@ const getBrowserHeaders = () => {
   
   // 모바일에서는 기본 헤더만 사용 (이미 잘 작동함)
   if (isMobile) {
+    console.log('모바일 환경 - 기본 헤더 사용');
     return baseHeaders;
   }
   
   // PC 환경 - 사파리와 크롬에 따라 다른 User-Agent 사용
-  if (isSafari) {
+  if (browser === 'safari') {
+    console.log('PC 사파리 환경 - 사파리 전용 헤더 사용');
     return {
       ...baseHeaders,
       'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15',
@@ -28,6 +48,7 @@ const getBrowserHeaders = () => {
       'Cache-Control': 'no-cache',
     };
   } else {
+    console.log('PC 크롬 환경 - 크롬 전용 헤더 사용');
     // 크롬 및 기타 브라우저
     return {
       ...baseHeaders,
@@ -233,13 +254,25 @@ export const fetchStoresByRegion = async (region: Region): Promise<Store[]> => {
     return stores;
     
   } catch (error) {
+    const { browser, isMobile } = getBrowserInfo();
+    
     // 타임아웃이나 AbortError 처리
     if (error instanceof Error && error.name === 'AbortError') {
-      console.error(`${region} 지역 매장 목록 조회 타임아웃 (30초 초과)`);
+      console.error(`[${browser}-${isMobile ? 'mobile' : 'pc'}] ${region} 지역 매장 목록 조회 타임아웃 (30초 초과)`);
     } else if (error instanceof Error && error.message.includes('signal')) {
-      console.error(`${region} 지역 매장 목록 조회 중 중단됨`);
+      console.error(`[${browser}-${isMobile ? 'mobile' : 'pc'}] ${region} 지역 매장 목록 조회 중 중단됨`);
+    } else if (error instanceof Error && (error.message.includes('fetch') || error.message.includes('NetworkError'))) {
+      console.error(`[${browser}-${isMobile ? 'mobile' : 'pc'}] ${region} 지역 네트워크 오류:`, {
+        message: error.message,
+        name: error.name,
+        stack: error.stack?.substring(0, 200)
+      });
     } else {
-      console.error(`${region} 지역 매장 목록 조회 실패:`, error);
+      console.error(`[${browser}-${isMobile ? 'mobile' : 'pc'}] ${region} 지역 매장 목록 조회 실패:`, {
+        error: error instanceof Error ? error.message : String(error),
+        type: typeof error,
+        name: error instanceof Error ? error.name : 'unknown'
+      });
     }
     
     // API 실패시 백업으로 Mock 데이터 사용
@@ -564,20 +597,32 @@ export const searchProductsInStore = async (
     return products;
     
   } catch (error) {
+    const { browser, isMobile } = getBrowserInfo();
+    
     // 타임아웃이나 AbortError 처리
     if (error instanceof Error && error.name === 'AbortError') {
-      console.error(`상품 검색 타임아웃 (${region} - ${storeCode}) - 45초 초과`);
+      console.error(`[${browser}-${isMobile ? 'mobile' : 'pc'}] 상품 검색 타임아웃 (${region} - ${storeCode}) - 45초 초과`);
     } else if (error instanceof Error && error.message.includes('signal')) {
-      console.error(`상품 검색 중 중단됨 (${region} - ${storeCode})`);
+      console.error(`[${browser}-${isMobile ? 'mobile' : 'pc'}] 상품 검색 중 중단됨 (${region} - ${storeCode})`);
+    } else if (error instanceof Error && (error.message.includes('fetch') || error.message.includes('NetworkError'))) {
+      console.error(`[${browser}-${isMobile ? 'mobile' : 'pc'}] 상품 검색 네트워크 오류 (${region} - ${storeCode}):`, {
+        message: error.message,
+        name: error.name,
+        stack: error.stack?.substring(0, 200)
+      });
     } else {
-      console.error(`상품 검색 실패 (${region} - ${storeCode}):`, error);
+      console.error(`[${browser}-${isMobile ? 'mobile' : 'pc'}] 상품 검색 실패 (${region} - ${storeCode}):`, {
+        error: error instanceof Error ? error.message : String(error),
+        type: typeof error,
+        name: error instanceof Error ? error.name : 'unknown'
+      });
     }
     return [];
   }
 };
 
 /**
- * 모든 지역의 모든 매장에서 상품을 검색하는 함수
+ * 모든 지역의 모든 매장에서 상품을 검색하는 함수 (네트워크 부하 최적화)
  */
 export const searchAllStores = async (keyword: string): Promise<Product[]> => {
   if (!keyword.trim()) {
@@ -586,8 +631,9 @@ export const searchAllStores = async (keyword: string): Promise<Product[]> => {
 
   const allProducts: Product[] = [];
   
-  // 서울, 경기, 인천만 검색 (사용자 요청)
-  const targetRegions: Region[] = ['서울', '경기', '인천'];
+  // 서울, 경기만 검색 (사용자 요청)
+  const targetRegions: Region[] = ['서울', '경기'];
+  
   for (const region of targetRegions) {
     try {
       console.log(`${region} 지역 매장들 검색 중...`);
@@ -595,20 +641,39 @@ export const searchAllStores = async (keyword: string): Promise<Product[]> => {
       // 지역별 매장 목록 가져오기
       const stores = await fetchStoresByRegion(region);
       
-      // 각 매장에서 상품 검색 (병렬 처리)
-      const regionProducts = await Promise.allSettled(
-        stores.map(store => searchProductsInStore(region, store.code, keyword))
+      // 토이저러스, 그랑그로서리 매장만 필터링
+      const filteredStores = stores.filter(store => 
+        store.name.includes('토이저러스') || store.name.includes('그랑그로서리')
       );
+      
+      console.log(`${region} 지역: 전체 ${stores.length}개 매장 중 ${filteredStores.length}개 매장(토이저러스/그랑그로서리)을 검색합니다.`);
+      
+      // 매장을 배치로 나누어 처리 (한 번에 3개씩만)
+      const batchSize = 3;
+      for (let i = 0; i < filteredStores.length; i += batchSize) {
+        const batch = filteredStores.slice(i, i + batchSize);
+        console.log(`${region} 지역 ${i + 1}-${Math.min(i + batchSize, filteredStores.length)}/${filteredStores.length} 매장 검색 중...`);
+        
+        // 배치 내에서는 병렬 처리
+        const batchProducts = await Promise.allSettled(
+          batch.map(store => searchProductsInStore(region, store.code, keyword))
+        );
 
-      // 성공한 결과들만 수집
-      regionProducts.forEach((result) => {
-        if (result.status === 'fulfilled') {
-          allProducts.push(...result.value);
+        // 성공한 결과들만 수집
+        batchProducts.forEach((result) => {
+          if (result.status === 'fulfilled') {
+            allProducts.push(...result.value);
+          }
+        });
+
+        // 배치 간 딜레이 (네트워크 부하 방지)
+        if (i + batchSize < filteredStores.length) {
+          await new Promise(resolve => setTimeout(resolve, 1000)); // 1초 대기
         }
-      });
+      }
 
-      // API 부하 방지를 위한 딜레이
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // 지역 간 딜레이
+      await new Promise(resolve => setTimeout(resolve, 500));
       
     } catch (error) {
       console.error(`${region} 지역 검색 중 오류:`, error);

@@ -6,10 +6,10 @@ export default function Home() {
       <div className="container mx-auto px-4 py-8">
         <header className="text-center mb-8">
           <h1 className="text-4xl font-bold text-gray-800 dark:text-white mb-2">
-            🛒 롯데마트 재고 확인 서비스
+            🧸 롯데 토이저러스, 그랑그로서리 검색
           </h1>
           <p className="text-lg text-gray-600 dark:text-gray-300">
-            전국 롯데마트 매장의 상품 재고를 한 번에 확인하세요
+            서울, 경기 지역 토이저러스와 그랑그로서리 매장의 상품 재고를 한 번에 확인하세요
           </p>
         </header>
         
