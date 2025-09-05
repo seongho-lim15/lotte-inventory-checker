@@ -63,12 +63,28 @@ const InventoryChecker: React.FC = () => {
       // 에러 타입에 따른 구체적인 메시지 제공
       if (err instanceof Error) {
         if (err.name === 'AbortError') {
-          setError(`⏱️ 네트워크 응답 시간이 초과되었습니다. Wi-Fi 환경에서 다시 시도해주세요. (${browser})`);
-        } else if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
-          if (browser === 'safari' || !isMobile) {
-            setError('🌐 사파리/PC에서 네트워크 문제가 발생했습니다. 크롬 모바일 앱 사용을 권장합니다.');
+          // 모바일 데이터인지 확인
+          const connection = typeof window !== 'undefined' && 'connection' in navigator ? 
+            (navigator as Navigator & { connection?: any }).connection : null;
+          const isCellular = connection?.type === 'cellular' || 
+            ['2g', '3g', '4g'].some(type => connection?.effectiveType?.includes(type));
+          
+          if (isCellular) {
+            setError('⏱️ 모바일 데이터 환경에서 응답 시간이 초과되었습니다. Wi-Fi 연결을 권장합니다.');
           } else {
-            setError('📶 네트워크 연결을 확인하고 Wi-Fi 환경에서 다시 시도해주세요.');
+            setError('⏱️ 네트워크 응답 시간이 초과되었습니다. 연결 상태를 확인해주세요.');
+          }
+        } else if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
+          const connection = typeof window !== 'undefined' && 'connection' in navigator ? 
+            (navigator as Navigator & { connection?: any }).connection : null;
+          const isCellular = connection?.type === 'cellular';
+          
+          if (isCellular) {
+            setError('📶 모바일 데이터 환경에서 네트워크 오류가 발생했습니다. Wi-Fi 환경에서 다시 시도해주세요.');
+          } else if (browser === 'safari' || !isMobile) {
+            setError('🌐 네트워크 문제가 발생했습니다. 크롬 모바일 앱 사용을 권장합니다.');
+          } else {
+            setError('📶 네트워크 연결을 확인하고 다시 시도해주세요.');
           }
         } else {
           setError(`❌ 검색 중 오류가 발생했습니다. (${browser}-${isMobile ? 'mobile' : 'pc'}) 잠시 후 다시 시도해주세요.`);
