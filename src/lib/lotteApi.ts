@@ -5,104 +5,21 @@ const PROXY_BASE_URL = '/api/proxy/lotte';
 
 // 브라우저 정보 감지 함수
 const getBrowserInfo = () => {
-  if (typeof window === 'undefined') return { browser: 'server', isMobile: false, connectionType: 'unknown', isSlowConnection: false };
+  if (typeof window === 'undefined') return { browser: 'server', isMobile: false };
   
   const userAgent = navigator.userAgent;
   const isSafari = /^((?!chrome|android).)*safari/i.test(userAgent);
   const isChrome = /chrome/i.test(userAgent) && !/edge/i.test(userAgent);
   const isMobile = /iPhone|iPad|iPod|Android/i.test(userAgent);
-  
-  // 연결 타입 감지 (모바일 데이터 vs WiFi)
-  let connectionType = 'unknown';
-  let isSlowConnection = false;
-  
-  if ('connection' in navigator) {
-    const connection = (navigator as Navigator & { connection?: any }).connection;
-    if (connection) {
-      connectionType = connection.effectiveType || connection.type || 'unknown';
-      // 2g, slow-2g는 느린 연결로 간주
-      isSlowConnection = ['slow-2g', '2g'].includes(connection.effectiveType) || connection.downlink < 1.5;
-      
-      // 모바일 데이터 감지 (connection.type이 'cellular'인 경우)
-      if (connection.type === 'cellular' || ['2g', '3g', '4g'].some(type => connectionType.includes(type))) {
-        connectionType = 'cellular';
-      }
-    }
-  }
+  const isWiFi = 'connection' in navigator ? (navigator as any).connection?.effectiveType !== 'slow-2g' : true;
   
   let browser = 'unknown';
   if (isChrome) browser = 'chrome';
   else if (isSafari) browser = 'safari';
   
-  console.log(`브라우저 정보: ${browser}, 모바일: ${isMobile}, 연결타입: ${connectionType}, 느린연결: ${isSlowConnection}`);
+  console.log(`브라우저 정보: ${browser}, 모바일: ${isMobile}, 네트워크: ${isWiFi ? 'fast' : 'slow'}`);
   
-  return { browser, isMobile, connectionType, isSlowConnection, userAgent };
-};
-
-// 네트워크 연결 상태에 따른 타임아웃 설정
-const getTimeoutForConnection = () => {
-  const { isSlowConnection, connectionType, isMobile } = getBrowserInfo();
-  
-  // 느린 연결이거나 셀룰러(모바일 데이터)인 경우 짧은 타임아웃 사용
-  if (isSlowConnection || connectionType === 'cellular') {
-    return { store: 15000, product: 20000 }; // 15초, 20초
-  }
-  
-  // 모바일이지만 WiFi인 경우 중간 타임아웃
-  if (isMobile) {
-    return { store: 20000, product: 25000 }; // 20초, 25초
-  }
-  
-  // PC 환경은 기존 타임아웃 유지
-  return { store: 30000, product: 45000 }; // 30초, 45초
-};
-
-// 재시도 메커니즘 (지수 백오프)
-const fetchWithRetry = async (url: string, options: RequestInit, maxRetries: number = 2): Promise<Response> => {
-  const { isSlowConnection, connectionType } = getBrowserInfo();
-  
-  // 느린 연결에서는 재시도 횟수를 줄임
-  const retries = (isSlowConnection || connectionType === 'cellular') ? Math.min(maxRetries, 1) : maxRetries;
-  
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    try {
-      const response = await fetch(url, options);
-      
-      // 성공한 경우 바로 반환
-      if (response.ok) {
-        return response;
-      }
-      
-      // 서버 오류 (5xx)인 경우에만 재시도, 클라이언트 오류 (4xx)는 재시도하지 않음
-      if (response.status >= 400 && response.status < 500) {
-        throw new Error(`클라이언트 오류: ${response.status}`);
-      }
-      
-      // 마지막 시도인 경우 오류 발생
-      if (attempt === retries) {
-        throw new Error(`서버 오류: ${response.status}`);
-      }
-      
-      console.warn(`시도 ${attempt + 1}/${retries + 1} 실패 (${response.status}), 재시도 중...`);
-      
-    } catch (error) {
-      // 마지막 시도이거나 재시도할 수 없는 오류인 경우
-      if (attempt === retries || 
-          (error instanceof Error && 
-           (error.name === 'AbortError' || error.message.includes('AbortError')))) {
-        throw error;
-      }
-      
-      console.warn(`시도 ${attempt + 1}/${retries + 1} 실패:`, error instanceof Error ? error.message : String(error));
-    }
-    
-    // 지수 백오프: 1초, 2초, 4초...
-    const delay = Math.min(1000 * Math.pow(2, attempt), 4000);
-    console.log(`${delay/1000}초 후 재시도...`);
-    await new Promise(resolve => setTimeout(resolve, delay));
-  }
-  
-  throw new Error('모든 재시도 실패');
+  return { browser, isMobile, isWiFi, userAgent };
 };
 
 // 브라우저별 헤더 설정 함수 (디버깅 정보 추가)
@@ -306,9 +223,8 @@ const getMockStores = (region: Region): Store[] => {
 export const fetchStoresByRegion = async (region: Region): Promise<Store[]> => {
   try {
     // 실제 롯데마트 API 호출 (프록시 사용) - 브라우저 호환성 개선
-    const timeouts = getTimeoutForConnection();
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    const timeoutId = controller ? setTimeout(() => controller.abort(), timeouts.store) : null; // 동적 타임아웃
+    const timeoutId = controller ? setTimeout(() => controller.abort(), 30000) : null; // 30초 타임아웃
     
     const fetchOptions: RequestInit = {
       headers: getBrowserHeaders(),
@@ -318,7 +234,7 @@ export const fetchStoresByRegion = async (region: Region): Promise<Store[]> => {
       fetchOptions.signal = controller.signal;
     }
     
-    const response = await fetchWithRetry(
+    const response = await fetch(
       `${PROXY_BASE_URL}/inc/asp/search_market_list.asp?p_area=${encodeURIComponent(region)}&p_type=1`,
       fetchOptions
     );
@@ -341,9 +257,8 @@ export const fetchStoresByRegion = async (region: Region): Promise<Store[]> => {
     const { browser, isMobile } = getBrowserInfo();
     
     // 타임아웃이나 AbortError 처리
-    const timeouts = getTimeoutForConnection();
     if (error instanceof Error && error.name === 'AbortError') {
-      console.error(`[${browser}-${isMobile ? 'mobile' : 'pc'}] ${region} 지역 매장 목록 조회 타임아웃 (${timeouts.store/1000}초 초과)`);
+      console.error(`[${browser}-${isMobile ? 'mobile' : 'pc'}] ${region} 지역 매장 목록 조회 타임아웃 (30초 초과)`);
     } else if (error instanceof Error && error.message.includes('signal')) {
       console.error(`[${browser}-${isMobile ? 'mobile' : 'pc'}] ${region} 지역 매장 목록 조회 중 중단됨`);
     } else if (error instanceof Error && (error.message.includes('fetch') || error.message.includes('NetworkError'))) {
@@ -634,11 +549,10 @@ export const searchProductsInStore = async (
 ): Promise<Product[]> => {
   try {
     const storeName = getStoreName(region, storeCode);
-    const timeouts = getTimeoutForConnection();
 
     // 실제 롯데마트 API 호출 (프록시 사용) - 브라우저 호환성 개선
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    const timeoutId = controller ? setTimeout(() => controller.abort(), timeouts.product) : null; // 동적 타임아웃
+    const timeoutId = controller ? setTimeout(() => controller.abort(), 45000) : null; // 45초 타임아웃 (상품 검색이 더 오래 걸림)
     
     const fetchOptions: RequestInit = {
       method: 'POST',
@@ -657,7 +571,7 @@ export const searchProductsInStore = async (
       fetchOptions.signal = controller.signal;
     }
     
-    const response = await fetchWithRetry(
+    const response = await fetch(
       `${PROXY_BASE_URL}/product/search_product.asp`,
       fetchOptions
     );
@@ -686,9 +600,8 @@ export const searchProductsInStore = async (
     const { browser, isMobile } = getBrowserInfo();
     
     // 타임아웃이나 AbortError 처리
-    const timeouts = getTimeoutForConnection();
     if (error instanceof Error && error.name === 'AbortError') {
-      console.error(`[${browser}-${isMobile ? 'mobile' : 'pc'}] 상품 검색 타임아웃 (${region} - ${storeCode}) - ${timeouts.product/1000}초 초과`);
+      console.error(`[${browser}-${isMobile ? 'mobile' : 'pc'}] 상품 검색 타임아웃 (${region} - ${storeCode}) - 45초 초과`);
     } else if (error instanceof Error && error.message.includes('signal')) {
       console.error(`[${browser}-${isMobile ? 'mobile' : 'pc'}] 상품 검색 중 중단됨 (${region} - ${storeCode})`);
     } else if (error instanceof Error && (error.message.includes('fetch') || error.message.includes('NetworkError'))) {
